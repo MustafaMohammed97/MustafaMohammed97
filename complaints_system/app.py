@@ -5,7 +5,7 @@ import io
 import os
 import secrets
 import sqlite3
-from datetime import date, datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask import (
@@ -52,6 +52,10 @@ FAULT_TYPES = [
 
 RESET_CONFIRM_WORD = "تصفير"
 
+# كل الأوقات تُسجّل بتوقيت بغداد (UTC+3، العراق لا يعمل بالتوقيت الصيفي)
+# بغض النظر عن توقيت السيرفر أو الجهاز المستخدم
+BAGHDAD_TZ = timezone(timedelta(hours=3), "Asia/Baghdad")
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,11 +98,24 @@ CREATE TABLE IF NOT EXISTS activity_log (
 CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);
 CREATE INDEX IF NOT EXISTS idx_complaints_created ON complaints(created_at);
 CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
+def baghdad_now():
+    return datetime.now(BAGHDAD_TZ)
+
+
 def now_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return baghdad_now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def baghdad_today():
+    return baghdad_now().date()
 
 
 def neighborhood_sort_key(name):
@@ -143,9 +160,25 @@ def create_app(test_config=None):
         if db is not None:
             db.close()
 
+    def migrate_times_to_baghdad(db):
+        """الإصدارات السابقة سجّلت الأوقات بتوقيت السيرفر (UTC في PythonAnywhere)،
+        فتُحوَّل مرة واحدة إلى توقيت بغداد."""
+        server_offset = datetime.now().astimezone().utcoffset() or timedelta(0)
+        minutes = int((timedelta(hours=3) - server_offset).total_seconds() // 60)
+        if minutes:
+            shift = f"{minutes:+d} minutes"
+            for table, col in (("users", "created_at"), ("complaints", "created_at"),
+                               ("complaints", "completed_at"), ("activity_log", "created_at")):
+                db.execute(f"UPDATE {table} SET {col} = datetime({col}, ?)"
+                           f" WHERE {col} IS NOT NULL", (shift,))
+
     def init_db():
         db = get_db()
+        existing = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         db.executescript(SCHEMA)
+        if "users" in existing and "settings" not in existing:
+            migrate_times_to_baghdad(db)
+        db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('timezone', 'Asia/Baghdad')")
         # ترقية قواعد البيانات المنشأة بالإصدار الأول
         user_cols = {r["name"] for r in db.execute("PRAGMA table_info(users)")}
         if "is_deleted" not in user_cols:
@@ -435,7 +468,7 @@ def create_app(test_config=None):
     @app.route("/reports")
     @permission_required("reports")
     def reports():
-        today = date.today()
+        today = baghdad_today()
         date_from = parse_date(request.args.get("from"), today.replace(day=1))
         date_to = parse_date(request.args.get("to"), today)
         if date_from > date_to:
@@ -492,7 +525,7 @@ def create_app(test_config=None):
     @permission_required("view_activity")
     def activity():
         db = get_db()
-        today = date.today()
+        today = baghdad_today()
         date_from = parse_date(request.args.get("from"), today.replace(day=1))
         date_to = parse_date(request.args.get("to"), today)
         if date_from > date_to:

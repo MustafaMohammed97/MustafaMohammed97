@@ -197,3 +197,37 @@ def test_upgrades_v1_database(tmp_path):
     c = app.test_client()
     assert login(c, "admin", "admin123").status_code == 302
     assert c.get("/users").status_code == 200
+
+
+def test_times_are_baghdad(client):
+    from datetime import datetime, timedelta, timezone
+    import app as app_module
+    login(client, "admin", "admin123")
+    add_complaint(client)
+    page = client.get("/").get_data(as_text=True)
+    expected = datetime.now(timezone(timedelta(hours=3))).strftime("%Y-%m-%d %H:")
+    assert expected in page
+    assert app_module.now_str().startswith(expected[:10])
+
+
+def test_old_times_shifted_once(tmp_path, monkeypatch):
+    import sqlite3
+    monkeypatch.setenv("TZ", "UTC")
+    import time
+    time.tzset()
+    db_path = tmp_path / "v2.db"
+    app = create_app({"TESTING": True, "DATABASE": str(db_path), "SECRET_KEY": "t"})
+    con = sqlite3.connect(db_path)
+    con.execute("DROP TABLE settings")  # محاكاة قاعدة بيانات من الإصدار السابق
+    con.execute("INSERT INTO complaints (neighborhood, alley, house, fault_type, phone,"
+                " created_by, created_at) VALUES ('1','2','3','x','0770000000',1,"
+                " '2026-10-04 09:00:00')")
+    con.commit()
+    con.close()
+    create_app({"TESTING": True, "DATABASE": str(db_path), "SECRET_KEY": "t"})
+    create_app({"TESTING": True, "DATABASE": str(db_path), "SECRET_KEY": "t"})
+    con = sqlite3.connect(db_path)
+    assert con.execute("SELECT created_at FROM complaints").fetchone()[0] == "2026-10-04 12:00:00"
+    con.close()
+    monkeypatch.delenv("TZ")
+    time.tzset()
