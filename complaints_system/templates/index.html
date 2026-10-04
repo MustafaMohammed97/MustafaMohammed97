@@ -1,45 +1,77 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="tabs">
-  <a href="{{ url_for('index', tab='current') }}" class="tab {% if tab == 'current' %}active{% endif %}">
-    الشكاوى الحالية <span class="count">{{ open_count }}</span>
-  </a>
-  <a href="{{ url_for('index', tab='done') }}" class="tab {% if tab == 'done' %}active{% endif %}">
-    الشكاوى المنجزة <span class="count">{{ done_count }}</span>
-  </a>
-</div>
-
-<div class="card">
-  {% if tab == 'current' and can('add_complaint') %}
-  <details class="add-box" {% if open_count == 0 %}open{% endif %}>
-    <summary class="btn btn-primary">+ إضافة شكوى جديدة</summary>
-    <form method="post" action="{{ url_for('add_complaint') }}" class="grid-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label>المحلة <input name="neighborhood" required></label>
-      <label>الزقاق <input name="alley" required></label>
-      <label>الدار <input name="house" required></label>
-      <label>نوع العطل
-        <input name="fault_type" list="fault-types" required autocomplete="off">
-        <datalist id="fault-types">
-          {% for f in fault_types %}<option value="{{ f }}">{% endfor %}
-        </datalist>
-      </label>
-      <label>رقم هاتف صاحب الشكوى
-        <input name="phone" type="tel" inputmode="numeric" required dir="ltr">
-      </label>
-      <div class="form-actions"><button class="btn btn-success">حفظ الشكوى</button></div>
-    </form>
-  </details>
-  {% endif %}
-
+<div class="page-head">
+  <div class="tabs">
+    <a href="{{ url_for('index', tab='current') }}" class="tab {% if tab == 'current' %}active{% endif %}">
+      الشكاوى الحالية <span class="count">{{ open_count }}</span>
+    </a>
+    <a href="{{ url_for('index', tab='areas') }}" class="tab {% if tab == 'areas' %}active{% endif %}">
+      حسب المحلة <span class="count">{{ areas_count }}</span>
+    </a>
+    <a href="{{ url_for('index', tab='done') }}" class="tab {% if tab == 'done' %}active{% endif %}">
+      الشكاوى المنجزة <span class="count">{{ done_count }}</span>
+    </a>
+  </div>
+  {% if tab != 'areas' %}
   <form method="get" class="search">
     <input type="hidden" name="tab" value="{{ tab }}">
-    <input name="q" value="{{ q }}" placeholder="بحث برقم الشكوى أو المحلة أو الزقاق أو الهاتف...">
-    <button class="btn btn-light">بحث</button>
-    {% if q %}<a href="{{ url_for('index', tab=tab) }}" class="btn btn-light">مسح</a>{% endif %}
+    <input name="q" value="{{ q }}" placeholder="بحث برقم الشكوى، المحلة، الزقاق، الهاتف...">
+    {% if q %}<a href="{{ url_for('index', tab=tab) }}" class="btn btn-ghost btn-sm">مسح</a>{% endif %}
   </form>
+  {% endif %}
+</div>
 
+{% if tab == 'current' and can('add_complaint') %}
+<details class="card add-box" {% if open_count == 0 %}open{% endif %}>
+  <summary><span class="btn btn-primary">+ إضافة شكوى جديدة</span></summary>
+  <form method="post" action="{{ url_for('add_complaint') }}" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>المحلة <input name="neighborhood" required></label>
+    <label>الزقاق <input name="alley" required></label>
+    <label>الدار <input name="house" required></label>
+    <label>نوع العطل
+      <input name="fault_type" list="fault-types" required autocomplete="off">
+      <datalist id="fault-types">
+        {% for f in fault_types %}<option value="{{ f }}">{% endfor %}
+      </datalist>
+    </label>
+    <label>رقم هاتف صاحب الشكوى
+      <input name="phone" type="tel" inputmode="numeric" required dir="ltr">
+    </label>
+    <div class="form-actions"><button class="btn btn-success">حفظ الشكوى</button></div>
+  </form>
+</details>
+{% endif %}
+
+{% if tab == 'areas' %}
+  {% if areas %}
+  <div class="areas">
+    {% for name, items in areas %}
+    <section class="area">
+      <header>
+        <span class="area-name">{{ name }}</span>
+        <span class="area-count">{{ items|length }} شكوى</span>
+      </header>
+      <table>
+        <thead><tr><th>زقاق</th><th>دار</th></tr></thead>
+        <tbody>
+          {% for c in items %}
+          <tr onclick="location.href='{{ url_for('view_complaint', complaint_id=c['id']) }}'" title="{{ c['fault_type'] }}">
+            <td>{{ c['alley'] }}</td>
+            <td>{{ c['house'] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">لا توجد شكاوى حالية</div>
+  {% endif %}
+{% else %}
+<div class="card flush">
   <div class="table-wrap">
   <table class="grid">
     <thead>
@@ -60,41 +92,49 @@
           <th>تاريخ الإنجاز</th>
         {% else %}
           <th>سجلها</th>
-          <th></th>
         {% endif %}
+        <th></th>
       </tr>
     </thead>
     <tbody>
       {% for c in complaints %}
       <tr>
-        <td><a href="{{ url_for('view_complaint', complaint_id=c['id']) }}">{{ c['id'] }}</a></td>
-        <td>{{ c['neighborhood'] }}</td>
+        <td><a class="id-link" href="{{ url_for('view_complaint', complaint_id=c['id']) }}">{{ c['id'] }}</a></td>
+        <td><b>{{ c['neighborhood'] }}</b></td>
         <td>{{ c['alley'] }}</td>
         <td>{{ c['house'] }}</td>
-        <td>{{ c['fault_type'] }}</td>
-        <td dir="ltr">{{ c['phone'] }}</td>
-        <td class="nowrap">{{ c['created_at'][:16] }}</td>
+        <td><span class="pill">{{ c['fault_type'] }}</span></td>
+        <td dir="ltr" class="num">{{ c['phone'] }}</td>
+        <td class="nowrap muted">{{ c['created_at'][:16] }}</td>
         {% if tab == 'done' %}
           <td>{{ c['feeder'] }}</td>
           <td>{{ c['technician'] }}</td>
           <td>{{ c['device_writer'] }}</td>
           <td>{{ c['materials'] or '—' }}</td>
           <td>{{ c['notes'] or '—' }}</td>
-          <td class="nowrap">{{ c['completed_at'][:16] }}</td>
+          <td class="nowrap muted">{{ c['completed_at'][:16] }}</td>
         {% else %}
           <td>{{ c['created_by_name'] }}</td>
-          <td>
-            {% if can('complete_complaint') %}
-            <a class="btn btn-success btn-sm" href="{{ url_for('complete_complaint', complaint_id=c['id']) }}">تم الإنجاز</a>
-            {% endif %}
-          </td>
         {% endif %}
+        <td class="actions">
+          {% if tab == 'current' and can('complete_complaint') %}
+          <a class="btn btn-success btn-sm" href="{{ url_for('complete_complaint', complaint_id=c['id']) }}">تم الإنجاز</a>
+          {% endif %}
+          {% if can('delete_complaint') %}
+          <form method="post" action="{{ url_for('delete_complaint', complaint_id=c['id']) }}" class="inline"
+                onsubmit="return confirm('هل أنت متأكد من حذف الشكوى رقم {{ c['id'] }}؟ لا يمكن التراجع.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-danger-soft btn-sm" title="حذف">حذف</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="14" class="empty">لا توجد شكاوى {{ 'حالية' if tab == 'current' else 'منجزة' }}</td></tr>
+      <tr><td colspan="15" class="empty">لا توجد شكاوى {{ 'حالية' if tab == 'current' else 'منجزة' }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
 </div>
+{% endif %}
 {% endblock %}

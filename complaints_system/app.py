@@ -31,8 +31,11 @@ PERMISSIONS = {
     "add_complaint": {ROLE_ADMIN, ROLE_MANAGER, ROLE_EMPLOYEE},
     "view_complaints": {ROLE_ADMIN, ROLE_MANAGER, ROLE_EMPLOYEE},
     "complete_complaint": {ROLE_ADMIN, ROLE_EMPLOYEE},
+    "delete_complaint": {ROLE_ADMIN},
     "reports": {ROLE_ADMIN, ROLE_MANAGER},
+    "view_activity": {ROLE_ADMIN, ROLE_MANAGER},
     "manage_users": {ROLE_ADMIN},
+    "reset_database": {ROLE_ADMIN},
 }
 
 FAULT_TYPES = [
@@ -47,6 +50,8 @@ FAULT_TYPES = [
     "أخرى",
 ]
 
+RESET_CONFIRM_WORD = "تصفير"
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,6 +60,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 1,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 
@@ -77,13 +83,27 @@ CREATE TABLE IF NOT EXISTS complaints (
     completed_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    action TEXT NOT NULL,
+    details TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);
 CREATE INDEX IF NOT EXISTS idx_complaints_created ON complaints(created_at);
+CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id, created_at);
 """
 
 
 def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def neighborhood_sort_key(name):
+    """ترتيب المحلات رقمياً (830 قبل 1000) ثم الأسماء غير الرقمية."""
+    return (0, int(name), "") if name.isdigit() else (1, 0, name)
 
 
 def load_secret_key():
@@ -126,6 +146,10 @@ def create_app(test_config=None):
     def init_db():
         db = get_db()
         db.executescript(SCHEMA)
+        # ترقية قواعد البيانات المنشأة بالإصدار الأول
+        user_cols = {r["name"] for r in db.execute("PRAGMA table_info(users)")}
+        if "is_deleted" not in user_cols:
+            db.execute("ALTER TABLE users ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
         has_admin = db.execute(
             "SELECT 1 FROM users WHERE role = ?", (ROLE_ADMIN,)
         ).fetchone()
@@ -141,6 +165,17 @@ def create_app(test_config=None):
     with app.app_context():
         init_db()
 
+    def log_action(action, details="", user_id=None):
+        """يسجّل العملية دون commit؛ تُحفظ مع commit العملية نفسها."""
+        get_db().execute(
+            "INSERT INTO activity_log (user_id, action, details, created_at)"
+            " VALUES (?, ?, ?, ?)",
+            (user_id if user_id is not None else g.user["id"], action, details, now_str()),
+        )
+
+    def complaint_label(c):
+        return f"رقم {c['id']} — محلة {c['neighborhood']} زقاق {c['alley']} دار {c['house']}"
+
     # ---------- الجلسة والصلاحيات ----------
     @app.before_request
     def load_user():
@@ -148,7 +183,8 @@ def create_app(test_config=None):
         user_id = session.get("user_id")
         if user_id is not None:
             user = get_db().execute(
-                "SELECT * FROM users WHERE id = ? AND is_active = 1", (user_id,)
+                "SELECT * FROM users WHERE id = ? AND is_active = 1 AND is_deleted = 0",
+                (user_id,),
             ).fetchone()
             if user is None:
                 session.clear()
@@ -199,7 +235,7 @@ def create_app(test_config=None):
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             user = get_db().execute(
-                "SELECT * FROM users WHERE username = ?", (username,)
+                "SELECT * FROM users WHERE username = ? AND is_deleted = 0", (username,)
             ).fetchone()
             if user is None or not check_password_hash(user["password_hash"], password):
                 flash("اسم المستخدم أو كلمة المرور غير صحيحة", "error")
@@ -210,6 +246,8 @@ def create_app(test_config=None):
                 session.clear()
                 session["user_id"] = user["id"]
                 session["csrf_token"] = token
+                log_action("تسجيل دخول", user_id=user["id"])
+                get_db().commit()
                 next_url = request.args.get("next", "")
                 if not next_url.startswith("/") or next_url.startswith("//"):
                     next_url = url_for("index")
@@ -218,6 +256,9 @@ def create_app(test_config=None):
 
     @app.route("/logout", methods=["POST"])
     def logout():
+        if g.user is not None:
+            log_action("تسجيل خروج")
+            get_db().commit()
         session.clear()
         return redirect(url_for("login"))
 
@@ -240,6 +281,7 @@ def create_app(test_config=None):
                     "UPDATE users SET password_hash = ? WHERE id = ?",
                     (generate_password_hash(new), g.user["id"]),
                 )
+                log_action("تغيير كلمة المرور الشخصية")
                 db.commit()
                 flash("تم تغيير كلمة المرور بنجاح", "success")
                 return redirect(url_for("index"))
@@ -257,30 +299,41 @@ def create_app(test_config=None):
     @permission_required("view_complaints")
     def index():
         tab = request.args.get("tab", "current")
-        if tab not in ("current", "done"):
+        if tab not in ("current", "done", "areas"):
             tab = "current"
         q = request.args.get("q", "").strip()
-        status = "open" if tab == "current" else "done"
+        db = get_db()
+        counts = dict(db.execute(
+            "SELECT status, COUNT(*) FROM complaints GROUP BY status"
+        ).fetchall())
+        areas_count = db.execute(
+            "SELECT COUNT(DISTINCT neighborhood) FROM complaints WHERE status = 'open'"
+        ).fetchone()[0]
+        common = dict(tab=tab, q=q, open_count=counts.get("open", 0),
+                      done_count=counts.get("done", 0), areas_count=areas_count,
+                      fault_types=FAULT_TYPES)
+
+        if tab == "areas":
+            rows = db.execute(
+                "SELECT id, neighborhood, alley, house, fault_type FROM complaints"
+                " WHERE status = 'open' ORDER BY created_at, id"
+            ).fetchall()
+            areas = {}
+            for r in rows:
+                areas.setdefault(r["neighborhood"], []).append(r)
+            areas = sorted(areas.items(), key=lambda a: neighborhood_sort_key(a[0]))
+            return render_template("index.html", areas=areas, **common)
 
         sql = COMPLAINT_SELECT + " WHERE c.status = ?"
-        params = [status]
+        params = ["open" if tab == "current" else "done"]
         if q:
             like = f"%{q}%"
             sql += (" AND (c.neighborhood LIKE ? OR c.alley LIKE ? OR c.house LIKE ?"
                     " OR c.phone LIKE ? OR c.fault_type LIKE ? OR CAST(c.id AS TEXT) = ?)")
             params += [like, like, like, like, like, q]
-        sql += " ORDER BY c.created_at DESC" if tab == "current" else " ORDER BY c.completed_at DESC"
-
-        db = get_db()
+        sql += " ORDER BY c.created_at DESC, c.id DESC" if tab == "current" else " ORDER BY c.completed_at DESC, c.id DESC"
         complaints = db.execute(sql, params).fetchall()
-        counts = dict(db.execute(
-            "SELECT status, COUNT(*) FROM complaints GROUP BY status"
-        ).fetchall())
-        return render_template(
-            "index.html", tab=tab, q=q, complaints=complaints,
-            open_count=counts.get("open", 0), done_count=counts.get("done", 0),
-            fault_types=FAULT_TYPES,
-        )
+        return render_template("index.html", complaints=complaints, **common)
 
     @app.route("/complaints/new", methods=["POST"])
     @permission_required("add_complaint")
@@ -302,6 +355,9 @@ def create_app(test_config=None):
             (fields["neighborhood"], fields["alley"], fields["house"],
              fields["fault_type"], phone, g.user["id"], now_str()),
         )
+        log_action("إضافة شكوى",
+                   f"رقم {cur.lastrowid} — محلة {fields['neighborhood']} زقاق {fields['alley']}"
+                   f" دار {fields['house']} — {fields['fault_type']}")
         db.commit()
         flash(f"تم تسجيل الشكوى رقم {cur.lastrowid} بنجاح", "success")
         return redirect(url_for("index"))
@@ -341,10 +397,24 @@ def create_app(test_config=None):
                      form["notes"], form["materials"], g.user["id"], now_str(),
                      complaint_id),
                 )
+                log_action("إنجاز وترحيل شكوى",
+                           f"{complaint_label(complaint)} — الفني {form['technician']}")
                 db.commit()
                 flash(f"تم ترحيل الشكوى رقم {complaint_id} إلى الشكاوى المنجزة", "success")
                 return redirect(url_for("index"))
         return render_template("complete.html", c=complaint, form=form)
+
+    @app.route("/complaints/<int:complaint_id>/delete", methods=["POST"])
+    @permission_required("delete_complaint")
+    def delete_complaint(complaint_id):
+        complaint = get_complaint(complaint_id)
+        db = get_db()
+        db.execute("DELETE FROM complaints WHERE id = ?", (complaint_id,))
+        status = "منجزة" if complaint["status"] == "done" else "حالية"
+        log_action("حذف شكوى", f"{complaint_label(complaint)} ({status})")
+        db.commit()
+        flash(f"تم حذف الشكوى رقم {complaint_id}", "success")
+        return redirect(url_for("index", tab="done" if complaint["status"] == "done" else "current"))
 
     # ---------- التقارير ----------
     def parse_date(value, default):
@@ -384,6 +454,8 @@ def create_app(test_config=None):
         }
 
         if request.args.get("export") == "csv":
+            log_action("تصدير تقرير Excel", f"من {date_from} إلى {date_to}")
+            get_db().commit()
             return export_csv(rows, date_from, date_to)
 
         return render_template(
@@ -415,6 +487,43 @@ def create_app(test_config=None):
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
+    # ---------- سجل العمليات ----------
+    @app.route("/activity")
+    @permission_required("view_activity")
+    def activity():
+        db = get_db()
+        today = date.today()
+        date_from = parse_date(request.args.get("from"), today.replace(day=1))
+        date_to = parse_date(request.args.get("to"), today)
+        if date_from > date_to:
+            date_from, date_to = date_to, date_from
+        user_id = request.args.get("user", type=int)
+
+        sql = ("SELECT a.*, u.full_name, u.username, u.role, u.is_deleted"
+               " FROM activity_log a JOIN users u ON u.id = a.user_id"
+               " WHERE date(a.created_at) BETWEEN ? AND ?")
+        params = [date_from.isoformat(), date_to.isoformat()]
+        if user_id:
+            sql += " AND a.user_id = ?"
+            params.append(user_id)
+        sql += " ORDER BY a.id DESC LIMIT 1000"
+        entries = db.execute(sql, params).fetchall()
+
+        per_user = db.execute(
+            "SELECT u.id, u.full_name, u.role, u.is_deleted, COUNT(a.id) AS n,"
+            " MAX(a.created_at) AS last_at"
+            " FROM users u JOIN activity_log a ON a.user_id = u.id"
+            " WHERE date(a.created_at) BETWEEN ? AND ?"
+            " GROUP BY u.id ORDER BY n DESC",
+            (date_from.isoformat(), date_to.isoformat()),
+        ).fetchall()
+        all_users = db.execute("SELECT id, full_name, is_deleted FROM users ORDER BY full_name").fetchall()
+        return render_template(
+            "activity.html", entries=entries, per_user=per_user, users=all_users,
+            selected_user=user_id, date_from=date_from.isoformat(),
+            date_to=date_to.isoformat(),
+        )
+
     # ---------- إدارة المستخدمين ----------
     @app.route("/users", methods=["GET", "POST"])
     @permission_required("manage_users")
@@ -439,15 +548,21 @@ def create_app(test_config=None):
                     " VALUES (?, ?, ?, ?, ?)",
                     (username, full_name, generate_password_hash(password), role, now_str()),
                 )
+                log_action("إضافة مستخدم", f"{full_name} ({username}) — {ROLE_NAMES[role]}")
                 db.commit()
                 flash(f"تمت إضافة المستخدم {full_name} بنجاح", "success")
                 return redirect(url_for("users"))
-        all_users = db.execute("SELECT * FROM users ORDER BY id").fetchall()
+        all_users = db.execute(
+            "SELECT u.*, (SELECT COUNT(*) FROM activity_log a WHERE a.user_id = u.id) AS actions"
+            " FROM users u WHERE u.is_deleted = 0 ORDER BY u.id"
+        ).fetchall()
         return render_template("users.html", users=all_users,
                                assignable_roles=(ROLE_EMPLOYEE, ROLE_MANAGER))
 
     def get_managed_user(user_id):
-        user = get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = get_db().execute(
+            "SELECT * FROM users WHERE id = ? AND is_deleted = 0", (user_id,)
+        ).fetchone()
         if user is None:
             abort(404)
         if user["role"] == ROLE_ADMIN:
@@ -461,6 +576,8 @@ def create_app(test_config=None):
         db = get_db()
         db.execute("UPDATE users SET is_active = ? WHERE id = ?",
                    (0 if user["is_active"] else 1, user_id))
+        log_action("تعطيل مستخدم" if user["is_active"] else "تفعيل مستخدم",
+                   f"{user['full_name']} ({user['username']})")
         db.commit()
         flash("تم تحديث حالة المستخدم", "success")
         return redirect(url_for("users"))
@@ -476,9 +593,55 @@ def create_app(test_config=None):
             db = get_db()
             db.execute("UPDATE users SET password_hash = ? WHERE id = ?",
                        (generate_password_hash(password), user_id))
+            log_action("تغيير كلمة مرور مستخدم", f"{user['full_name']} ({user['username']})")
             db.commit()
             flash(f"تم تغيير كلمة مرور {user['full_name']}", "success")
         return redirect(url_for("users"))
+
+    @app.route("/users/<int:user_id>/delete", methods=["POST"])
+    @permission_required("manage_users")
+    def delete_user(user_id):
+        # حذف منطقي: يختفي المستخدم ولا يستطيع الدخول، لكن يبقى اسمه
+        # ظاهراً على الشكاوى والعمليات التي قام بها سابقاً
+        user = get_managed_user(user_id)
+        db = get_db()
+        db.execute(
+            "UPDATE users SET is_deleted = 1, is_active = 0, username = ? WHERE id = ?",
+            (f"{user['username']}#deleted{user_id}", user_id),
+        )
+        log_action("حذف مستخدم", f"{user['full_name']} ({user['username']}) — {ROLE_NAMES[user['role']]}")
+        db.commit()
+        flash(f"تم حذف المستخدم {user['full_name']}", "success")
+        return redirect(url_for("users"))
+
+    # ---------- تصفير قاعدة البيانات ----------
+    @app.route("/admin/reset", methods=["GET", "POST"])
+    @permission_required("reset_database")
+    def reset_database():
+        db = get_db()
+        if request.method == "POST":
+            if not check_password_hash(g.user["password_hash"], request.form.get("password", "")):
+                flash("كلمة المرور غير صحيحة", "error")
+            elif request.form.get("confirm", "").strip() != RESET_CONFIRM_WORD:
+                flash(f"يجب كتابة كلمة «{RESET_CONFIRM_WORD}» للتأكيد", "error")
+            else:
+                delete_users = request.form.get("delete_users") == "1"
+                db.execute("DELETE FROM complaints")
+                db.execute("DELETE FROM activity_log")
+                if delete_users:
+                    db.execute("DELETE FROM users WHERE role != ?", (ROLE_ADMIN,))
+                db.execute("DELETE FROM sqlite_sequence WHERE name IN ('complaints', 'activity_log')")
+                log_action("تصفير قاعدة البيانات",
+                           "حذف جميع الشكاوى والسجل" + (" والمستخدمين" if delete_users else ""))
+                db.commit()
+                flash("تم تصفير قاعدة البيانات بنجاح", "success")
+                return redirect(url_for("index"))
+        stats = {
+            "complaints": db.execute("SELECT COUNT(*) FROM complaints").fetchone()[0],
+            "users": db.execute("SELECT COUNT(*) FROM users WHERE role != ?", (ROLE_ADMIN,)).fetchone()[0],
+            "activity": db.execute("SELECT COUNT(*) FROM activity_log").fetchone()[0],
+        }
+        return render_template("reset.html", stats=stats, confirm_word=RESET_CONFIRM_WORD)
 
     # ---------- صفحات الأخطاء ----------
     @app.errorhandler(403)

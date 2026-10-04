@@ -4,23 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}شكاوى صيانة الميكانيك{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
 </head>
 <body>
   {% if g.user %}
+  {% set ep = request.endpoint %}
   <header class="topbar no-print">
-    <div class="brand">⚡ دائرة الكهرباء — شكاوى صيانة الميكانيك</div>
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="logo">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+      </span>
+      <span>
+        <b>شكاوى صيانة الميكانيك</b>
+        <small>دائرة الكهرباء</small>
+      </span>
+    </a>
     <nav>
-      {% if can('view_complaints') %}<a href="{{ url_for('index') }}">الشكاوى</a>{% endif %}
-      {% if can('reports') %}<a href="{{ url_for('reports') }}">التقارير</a>{% endif %}
-      {% if can('manage_users') %}<a href="{{ url_for('users') }}">المستخدمون</a>{% endif %}
-      <a href="{{ url_for('change_password') }}">كلمة المرور</a>
+      {% if can('view_complaints') %}<a href="{{ url_for('index') }}" class="{% if ep in ['index','view_complaint','complete_complaint'] %}active{% endif %}">الشكاوى</a>{% endif %}
+      {% if can('reports') %}<a href="{{ url_for('reports') }}" class="{% if ep == 'reports' %}active{% endif %}">التقارير</a>{% endif %}
+      {% if can('view_activity') %}<a href="{{ url_for('activity') }}" class="{% if ep == 'activity' %}active{% endif %}">سجل العمليات</a>{% endif %}
+      {% if can('manage_users') %}<a href="{{ url_for('users') }}" class="{% if ep == 'users' %}active{% endif %}">المستخدمون</a>{% endif %}
+      {% if can('reset_database') %}<a href="{{ url_for('reset_database') }}" class="danger-link {% if ep == 'reset_database' %}active{% endif %}">تصفير النظام</a>{% endif %}
     </nav>
     <div class="who">
-      {{ g.user['full_name'] }} <span class="badge">{{ ROLE_NAMES[g.user['role']] }}</span>
+      <a href="{{ url_for('change_password') }}" class="user-chip" title="تغيير كلمة المرور">
+        <span class="avatar">{{ g.user['full_name'][:1] }}</span>
+        <span><b>{{ g.user['full_name'] }}</b><small>{{ ROLE_NAMES[g.user['role']] }}</small></span>
+      </a>
       <form method="post" action="{{ url_for('logout') }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-light btn-sm">خروج</button>
+        <button class="btn btn-ghost btn-sm">خروج</button>
       </form>
     </div>
   </header>

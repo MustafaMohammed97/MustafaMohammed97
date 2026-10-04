@@ -1,18 +1,23 @@
 {% extends "base.html" %}
 {% block title %}تسجيل الدخول{% endblock %}
 {% block content %}
-<div class="login-box card">
-  <h1>⚡ نظام شكاوى صيانة الميكانيك</h1>
-  <p class="muted">دائرة الكهرباء</p>
-  <form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>اسم المستخدم
-      <input name="username" required autofocus>
-    </label>
-    <label>كلمة المرور
-      <input name="password" type="password" required>
-    </label>
-    <button class="btn btn-primary btn-block">دخول</button>
-  </form>
+<div class="login-wrap">
+  <div class="login-box card">
+    <span class="logo big">
+      <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+    </span>
+    <h1>نظام شكاوى صيانة الميكانيك</h1>
+    <p class="muted">دائرة الكهرباء — سجّل الدخول للمتابعة</p>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>اسم المستخدم
+        <input name="username" required autofocus autocomplete="username">
+      </label>
+      <label>كلمة المرور
+        <input name="password" type="password" required autocomplete="current-password">
+      </label>
+      <button class="btn btn-primary btn-block">دخول</button>
+    </form>
+  </div>
 </div>
 {% endblock %}

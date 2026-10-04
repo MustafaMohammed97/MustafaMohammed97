@@ -26,6 +26,13 @@
     {% endif %}
     <a class="btn btn-light" href="{{ url_for('index', tab='done' if c['status'] == 'done' else 'current') }}">رجوع</a>
     <button class="btn btn-light" onclick="window.print()">طباعة</button>
+    {% if can('delete_complaint') %}
+    <form method="post" action="{{ url_for('delete_complaint', complaint_id=c['id']) }}" class="inline"
+          onsubmit="return confirm('هل أنت متأكد من حذف الشكوى رقم {{ c['id'] }}؟ لا يمكن التراجع.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger-soft">حذف الشكوى</button>
+    </form>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

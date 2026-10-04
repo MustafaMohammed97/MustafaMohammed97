@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}سجل العمليات{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>سجل العمليات</h2>
+  <form method="get" class="grid-form">
+    <label>المستخدم
+      <select name="user">
+        <option value="">جميع المستخدمين</option>
+        {% for u in users %}
+        <option value="{{ u['id'] }}" {% if selected_user == u['id'] %}selected{% endif %}>
+          {{ u['full_name'] }}{% if u['is_deleted'] %} (محذوف){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>من تاريخ <input type="date" name="from" value="{{ date_from }}"></label>
+    <label>إلى تاريخ <input type="date" name="to" value="{{ date_to }}"></label>
+    <div class="form-actions"><button class="btn btn-primary">عرض</button></div>
+  </form>
+</div>
+
+{% if per_user and not selected_user %}
+<div class="user-stats">
+  {% for u in per_user %}
+  <a class="user-stat" href="{{ url_for('activity', user=u['id'], **{'from': date_from, 'to': date_to}) }}">
+    <span class="avatar">{{ u['full_name'][:1] }}</span>
+    <span class="grow">
+      <b>{{ u['full_name'] }}{% if u['is_deleted'] %} <small class="muted">(محذوف)</small>{% endif %}</b>
+      <small>{{ ROLE_NAMES[u['role']] }} · آخر عملية {{ u['last_at'][:16] }}</small>
+    </span>
+    <span class="big-num">{{ u['n'] }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card flush">
+  <div class="table-wrap">
+  <table class="grid">
+    <thead><tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr></thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td class="nowrap muted">{{ e['created_at'] }}</td>
+        <td class="nowrap"><b>{{ e['full_name'] }}</b> <small class="muted">{{ ROLE_NAMES[e['role']] }}</small></td>
+        <td class="nowrap">
+          {% set a = e['action'] %}
+          <span class="pill {% if 'حذف' in a or 'تصفير' in a %}pill-danger{% elif 'إنجاز' in a %}pill-success{% elif 'إضافة' in a %}pill-primary{% endif %}">{{ a }}</span>
+        </td>
+        <td>{{ e['details'] or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">لا توجد عمليات في هذه الفترة</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

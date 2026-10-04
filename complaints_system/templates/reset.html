@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}تصفير النظام{% endblock %}
+{% block content %}
+<div class="card narrow danger-card">
+  <h2>⚠️ تصفير قاعدة بيانات النظام</h2>
+  <p>هذه العملية <b>تحذف نهائياً</b> البيانات التالية ولا يمكن التراجع عنها:</p>
+  <ul class="reset-list">
+    <li>جميع الشكاوى الحالية والمنجزة <b>({{ stats.complaints }})</b></li>
+    <li>سجل العمليات بالكامل <b>({{ stats.activity }})</b></li>
+    <li>المستخدمون (اختياري) <b>({{ stats.users }})</b></li>
+  </ul>
+  <p class="muted">ننصح بتصدير تقرير Excel كامل قبل التصفير كنسخة احتياطية.</p>
+
+  <form method="post" onsubmit="return confirm('تأكيد أخير: سيتم حذف البيانات نهائياً. هل تريد المتابعة؟')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="check">
+      <input type="checkbox" name="delete_users" value="1">
+      حذف جميع المستخدمين أيضاً (عدا حساب السوبر أدمن)
+    </label>
+    <label>كلمة مرورك <input name="password" type="password" required autocomplete="current-password"></label>
+    <label>اكتب كلمة «{{ confirm_word }}» للتأكيد <input name="confirm" required autocomplete="off"></label>
+    <div class="form-actions">
+      <button class="btn btn-danger">تصفير قاعدة البيانات</button>
+      <a href="{{ url_for('index') }}" class="btn btn-ghost">إلغاء</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

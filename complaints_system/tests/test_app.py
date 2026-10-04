@@ -120,3 +120,80 @@ def test_disabled_user_cannot_login(client):
     logout(client)
     login(client, "emp", "secret1")
     assert client.get("/").status_code == 302
+
+
+def test_admin_deletes_complaints_and_users(client):
+    login(client, "admin", "admin123")
+    add_user(client, "emp", "employee")
+    add_complaint(client)
+    add_complaint(client, neighborhood="830")
+    t = token(client, "/")
+    assert client.post("/complaints/1/delete", data={"csrf_token": t}).status_code == 302
+    page = client.get("/").get_data(as_text=True)
+    assert "حي الجامعة" not in page and "830" in page
+
+    t = token(client, "/users")
+    client.post("/users/2/delete", data={"csrf_token": t})
+    assert ">emp<" not in client.get("/users").get_data(as_text=True)
+    # يمكن إعادة استخدام اسم المستخدم بعد الحذف
+    assert add_user(client, "emp", "employee").status_code == 302
+    logout(client)
+
+    login(client, "emp", "secret1")
+    t = token(client, "/")
+    assert client.post("/complaints/2/delete", data={"csrf_token": t}).status_code == 403
+    assert client.get("/admin/reset").status_code == 403
+    assert client.get("/activity").status_code == 403
+
+
+def test_activity_log(client):
+    login(client, "admin", "admin123")
+    add_user(client, "mgr", "manager")
+    add_complaint(client)
+    logout(client)
+    login(client, "mgr", "secret1")
+    page = client.get("/activity").get_data(as_text=True)
+    assert "إضافة شكوى" in page and "إضافة مستخدم" in page and "تسجيل دخول" in page
+    only_mgr = client.get("/activity?user=2").get_data(as_text=True)
+    assert "إضافة شكوى" not in only_mgr and "تسجيل دخول" in only_mgr
+
+
+def test_areas_tab(client):
+    login(client, "admin", "admin123")
+    add_complaint(client, neighborhood="860", alley="14", house="33")
+    add_complaint(client, neighborhood="830", alley="5", house="9")
+    add_complaint(client, neighborhood="860", alley="2", house="71")
+    page = client.get("/?tab=areas").get_data(as_text=True)
+    assert page.index('area-name">830') < page.index('area-name">860')
+    assert "2 شكوى" in page and "71" in page
+
+
+def test_reset_database(client):
+    login(client, "admin", "admin123")
+    add_user(client, "emp", "employee")
+    add_complaint(client)
+    t = token(client, "/admin/reset")
+    client.post("/admin/reset", data={"csrf_token": t, "password": "wrong", "confirm": "تصفير"})
+    assert "حي الجامعة" in client.get("/").get_data(as_text=True)
+    client.post("/admin/reset", data={"csrf_token": t, "password": "admin123",
+                                      "confirm": "تصفير", "delete_users": "1"})
+    assert "لا توجد شكاوى" in client.get("/").get_data(as_text=True)
+    assert ">emp<" not in client.get("/users").get_data(as_text=True)
+    add_complaint(client)
+    assert client.get("/complaints/1").status_code == 200  # الترقيم يبدأ من جديد
+
+
+def test_upgrades_v1_database(tmp_path):
+    import sqlite3
+    db_path = tmp_path / "old.db"
+    con = sqlite3.connect(db_path)
+    con.executescript("""
+        CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
+            full_name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
+    """)
+    con.close()
+    app = create_app({"TESTING": True, "DATABASE": str(db_path), "SECRET_KEY": "t"})
+    c = app.test_client()
+    assert login(c, "admin", "admin123").status_code == 302
+    assert c.get("/users").status_code == 200
