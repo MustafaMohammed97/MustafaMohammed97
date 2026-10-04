@@ -5,6 +5,7 @@ import io
 import os
 import secrets
 import sqlite3
+import tempfile
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -36,6 +37,7 @@ PERMISSIONS = {
     "view_activity": {ROLE_ADMIN, ROLE_MANAGER},
     "manage_users": {ROLE_ADMIN},
     "reset_database": {ROLE_ADMIN},
+    "backup": {ROLE_ADMIN},
 }
 
 FAULT_TYPES = [
@@ -51,6 +53,30 @@ FAULT_TYPES = [
 ]
 
 RESET_CONFIRM_WORD = "تصفير"
+
+APP_NAME = "نظام إدارة شكاوى صيانة الميكانيك"
+APP_VERSION = "1.3.0"
+DEVELOPER_NAME = "مصطفى محمد"
+DEVELOPER_EMAIL = "mustafa97.altaee@gmail.com"
+
+CHANGELOG = [
+    ("1.3.0", "2026-10-04", [
+        "تنزيل نسخة احتياطية كاملة من قاعدة البيانات للسوبر أدمن",
+        "صفحة «حول النظام» مع الإصدار وحقوق البرمجة",
+    ]),
+    ("1.2.0", "2026-10-04", [
+        "تسجيل جميع الأوقات بتوقيت بغداد",
+    ]),
+    ("1.1.0", "2026-10-04", [
+        "واجهة عصرية جديدة",
+        "تبويب الشكاوى حسب المحلة",
+        "سجل عمليات المستخدمين",
+        "حذف الشكاوى والمستخدمين وتصفير النظام للسوبر أدمن",
+    ]),
+    ("1.0.0", "2026-10-04", [
+        "الإصدار الأول: تسجيل الشكاوى وإنجازها، الصلاحيات، والتقارير",
+    ]),
+]
 
 # كل الأوقات تُسجّل بتوقيت بغداد (UTC+3، العراق لا يعمل بالتوقيت الصيفي)
 # بغض النظر عن توقيت السيرفر أو الجهاز المستخدم
@@ -240,7 +266,10 @@ def create_app(test_config=None):
 
     @app.context_processor
     def inject_helpers():
-        return {"csrf_token": csrf_token, "can": can, "ROLE_NAMES": ROLE_NAMES}
+        return {"csrf_token": csrf_token, "can": can, "ROLE_NAMES": ROLE_NAMES,
+                "APP_NAME": APP_NAME, "APP_VERSION": APP_VERSION,
+                "DEVELOPER_NAME": DEVELOPER_NAME, "DEVELOPER_EMAIL": DEVELOPER_EMAIL,
+                "current_year": baghdad_today().year}
 
     def login_required(view):
         @wraps(view)
@@ -675,6 +704,49 @@ def create_app(test_config=None):
             "activity": db.execute("SELECT COUNT(*) FROM activity_log").fetchone()[0],
         }
         return render_template("reset.html", stats=stats, confirm_word=RESET_CONFIRM_WORD)
+
+    # ---------- النسخ الاحتياطي ----------
+    @app.route("/admin/backup")
+    @permission_required("backup")
+    def backup():
+        db = get_db()
+        stats = {
+            "complaints": db.execute("SELECT COUNT(*) FROM complaints").fetchone()[0],
+            "users": db.execute("SELECT COUNT(*) FROM users WHERE is_deleted = 0").fetchone()[0],
+            "activity": db.execute("SELECT COUNT(*) FROM activity_log").fetchone()[0],
+            "size_kb": round(os.path.getsize(app.config["DATABASE"]) / 1024, 1),
+        }
+        last = db.execute(
+            "SELECT a.created_at, u.full_name FROM activity_log a JOIN users u ON u.id = a.user_id"
+            " WHERE a.action = 'تنزيل نسخة احتياطية' ORDER BY a.id DESC LIMIT 1"
+        ).fetchone()
+        return render_template("backup.html", stats=stats, last=last)
+
+    @app.route("/admin/backup/download", methods=["POST"])
+    @permission_required("backup")
+    def download_backup():
+        db = get_db()
+        log_action("تنزيل نسخة احتياطية")
+        db.commit()
+        # نسخة متسقة من قاعدة البيانات حتى لو كان هناك من يستخدم النظام في نفس اللحظة
+        fd, tmp_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        try:
+            dst = sqlite3.connect(tmp_path)
+            db.backup(dst)
+            dst.close()
+            with open(tmp_path, "rb") as f:
+                data = f.read()
+        finally:
+            os.remove(tmp_path)
+        filename = f"complaints_backup_{baghdad_now().strftime('%Y-%m-%d_%H-%M')}.db"
+        return Response(data, mimetype="application/octet-stream",
+                        headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+    # ---------- حول النظام ----------
+    @app.route("/about")
+    def about():
+        return render_template("about.html", changelog=CHANGELOG)
 
     # ---------- صفحات الأخطاء ----------
     @app.errorhandler(403)

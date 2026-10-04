@@ -334,6 +334,30 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .login-box form { text-align: right; margin-top: 24px; }
 .login-box h1 { font-size: 22px; margin-bottom: 4px; }
 
+/* ---------- النسخ الاحتياطي وحول النظام ---------- */
+.backup-last { margin: 14px 0 18px; }
+.tip { background: var(--primary-50); color: var(--primary-600); border-radius: 12px; padding: 12px 16px; }
+.about-head { text-align: center; margin-bottom: 22px; }
+.about-head h1 { font-size: 24px; margin-bottom: 2px; }
+.version {
+  display: inline-block; margin-top: 6px; padding: 4px 14px; border-radius: 999px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-weight: 700; font-size: 14px;
+}
+.about h3 { margin-top: 22px; }
+.features li, .release li { margin-bottom: 4px; }
+.changelog { display: grid; gap: 10px; }
+.release { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; background: #fbfcfe; }
+.release ul { margin: 6px 0 0; padding-inline-start: 22px; }
+.developer {
+  display: flex; align-items: center; gap: 14px; margin-top: 24px; padding: 16px;
+  border-radius: 14px; background: linear-gradient(135deg, var(--primary-50), #f5f3ff);
+}
+.developer .avatar { width: 52px; height: 52px; font-size: 22px; }
+.developer b, .developer small, .developer a { display: block; }
+.developer b { font-size: 18px; }
+.copyright { text-align: center; color: var(--muted); margin: 18px 0 0; font-size: 14px; }
+.site-footer { text-align: center; color: var(--muted); font-size: 13px; padding: 10px 16px 24px; }
+
 .print-only { display: none; }
 
 @media (max-width: 720px) {

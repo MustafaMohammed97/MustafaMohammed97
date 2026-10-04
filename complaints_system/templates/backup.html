@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}النسخ الاحتياطي{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h2>النسخ الاحتياطي</h2>
+  <p class="muted">تنزيل نسخة كاملة من قاعدة البيانات (الشكاوى، المستخدمون، سجل العمليات) كملف واحد على جهازك.
+    احتفظ بها في مكان آمن، فهي تحتوي على بيانات المواطنين.</p>
+
+  <div class="stats">
+    <div class="stat"><span>{{ stats.complaints }}</span>شكوى</div>
+    <div class="stat"><span>{{ stats.users }}</span>مستخدم</div>
+    <div class="stat"><span>{{ stats.activity }}</span>عملية مسجلة</div>
+    <div class="stat"><span>{{ stats.size_kb }}</span>كيلوبايت</div>
+  </div>
+
+  <form method="post" action="{{ url_for('download_backup') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-primary btn-block">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+      تنزيل نسخة احتياطية الآن
+    </button>
+  </form>
+
+  <p class="muted center backup-last">
+    {% if last %}آخر نسخة احتياطية: {{ last['created_at'] }} — بواسطة {{ last['full_name'] }}
+    {% else %}لم يتم تنزيل أي نسخة احتياطية بعد{% endif %}
+  </p>
+
+  <div class="tip">
+    <b>نصيحة:</b> نزّل نسخة احتياطية مرة كل أسبوع على الأقل، ودائماً قبل تصفير النظام.
+  </div>
+</div>
+{% endblock %}

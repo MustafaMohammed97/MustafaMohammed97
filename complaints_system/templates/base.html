@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
 </head>
 <body>
   {% if g.user %}
@@ -27,6 +27,8 @@
       {% if can('reports') %}<a href="{{ url_for('reports') }}" class="{% if ep == 'reports' %}active{% endif %}">التقارير</a>{% endif %}
       {% if can('view_activity') %}<a href="{{ url_for('activity') }}" class="{% if ep == 'activity' %}active{% endif %}">سجل العمليات</a>{% endif %}
       {% if can('manage_users') %}<a href="{{ url_for('users') }}" class="{% if ep == 'users' %}active{% endif %}">المستخدمون</a>{% endif %}
+      {% if can('backup') %}<a href="{{ url_for('backup') }}" class="{% if ep == 'backup' %}active{% endif %}">النسخ الاحتياطي</a>{% endif %}
+      <a href="{{ url_for('about') }}" class="{% if ep == 'about' %}active{% endif %}">حول النظام</a>
       {% if can('reset_database') %}<a href="{{ url_for('reset_database') }}" class="danger-link {% if ep == 'reset_database' %}active{% endif %}">تصفير النظام</a>{% endif %}
     </nav>
     <div class="who">
@@ -50,5 +52,10 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="site-footer no-print">
+    © {{ current_year }} {{ APP_NAME }} — الإصدار {{ APP_VERSION }}
+    · برمجة {{ DEVELOPER_NAME }}
+    · <a href="{{ url_for('about') }}">حول النظام</a>
+  </footer>
 </body>
 </html>

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}حول النظام{% endblock %}
+{% block content %}
+<div class="card narrow about">
+  <div class="about-head">
+    <span class="logo big">
+      <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+    </span>
+    <h1>{{ APP_NAME }}</h1>
+    <p class="muted">دائرة الكهرباء — صيانة الميكانيك</p>
+    <span class="version">الإصدار {{ APP_VERSION }}</span>
+  </div>
+
+  <h3>عن النظام</h3>
+  <p>نظام لتسجيل شكاوى المواطنين الخاصة بأعطال الكهرباء ومتابعتها حتى الإنجاز، ويتضمن:</p>
+  <ul class="features">
+    <li>تسجيل الشكاوى ومتابعتها في تبويبات (الحالية، حسب المحلة، المنجزة)</li>
+    <li>إنجاز الشكاوى وترحيلها مع معلومات المغذي والفني وكاتب الجهاز والمواد المستخدمة</li>
+    <li>صلاحيات متعددة: موظف الشكاوى، مدير الصيانة، السوبر أدمن</li>
+    <li>تقارير حسب الفترة مع الطباعة والتصدير إلى Excel</li>
+    <li>سجل كامل لعمليات المستخدمين</li>
+    <li>النسخ الاحتياطي لقاعدة البيانات</li>
+  </ul>
+
+  <h3>سجل الإصدارات</h3>
+  <div class="changelog">
+    {% for ver, day, items in changelog %}
+    <div class="release">
+      <div class="release-head"><span class="pill {% if loop.first %}pill-primary{% endif %}">{{ ver }}</span> <small class="muted">{{ day }}</small></div>
+      <ul>{% for item in items %}<li>{{ item }}</li>{% endfor %}</ul>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="developer">
+    <span class="avatar">{{ DEVELOPER_NAME[:1] }}</span>
+    <div>
+      <small class="muted">تمت البرمجة من قبل المبرمج</small>
+      <b>{{ DEVELOPER_NAME }}</b>
+      <a href="mailto:{{ DEVELOPER_EMAIL }}" dir="ltr">{{ DEVELOPER_EMAIL }}</a>
+    </div>
+  </div>
+
+  <p class="copyright">© {{ current_year }} جميع الحقوق محفوظة — {{ DEVELOPER_NAME }}</p>
+</div>
+{% endblock %}

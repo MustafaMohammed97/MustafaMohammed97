@@ -9,7 +9,8 @@
     <li>سجل العمليات بالكامل <b>({{ stats.activity }})</b></li>
     <li>المستخدمون (اختياري) <b>({{ stats.users }})</b></li>
   </ul>
-  <p class="muted">ننصح بتصدير تقرير Excel كامل قبل التصفير كنسخة احتياطية.</p>
+  <p class="muted">ننصح بتنزيل نسخة احتياطية قبل التصفير:
+    <a href="{{ url_for('backup') }}">صفحة النسخ الاحتياطي</a></p>
 
   <form method="post" onsubmit="return confirm('تأكيد أخير: سيتم حذف البيانات نهائياً. هل تريد المتابعة؟')">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

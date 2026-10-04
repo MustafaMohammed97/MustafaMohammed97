@@ -231,3 +231,28 @@ def test_old_times_shifted_once(tmp_path, monkeypatch):
     con.close()
     monkeypatch.delenv("TZ")
     time.tzset()
+
+
+def test_backup_download_and_about(client, tmp_path):
+    import sqlite3
+    login(client, "admin", "admin123")
+    add_complaint(client)
+    assert client.get("/admin/backup").status_code == 200
+    t = token(client, "/admin/backup")
+    r = client.post("/admin/backup/download", data={"csrf_token": t})
+    assert r.status_code == 200 and "attachment" in r.headers["Content-Disposition"]
+    out = tmp_path / "b.db"
+    out.write_bytes(r.data)
+    con = sqlite3.connect(out)
+    assert con.execute("SELECT neighborhood FROM complaints").fetchone()[0] == "حي الجامعة"
+    con.close()
+    assert "تنزيل نسخة احتياطية" in client.get("/activity").get_data(as_text=True)
+    about = client.get("/about").get_data(as_text=True)
+    assert "مصطفى محمد" in about and "mustafa97.altaee@gmail.com" in about and "1.3.0" in about
+    logout(client)
+    assert client.get("/about").status_code == 200  # متاحة بدون تسجيل دخول
+    login(client, "admin", "admin123")
+    add_user(client, "mgr", "manager")
+    logout(client)
+    login(client, "mgr", "secret1")
+    assert client.get("/admin/backup").status_code == 403
