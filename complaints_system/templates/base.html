@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}شكاوى صيانة الميكانيك{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if g.user %}
+  <header class="topbar no-print">
+    <div class="brand">⚡ دائرة الكهرباء — شكاوى صيانة الميكانيك</div>
+    <nav>
+      {% if can('view_complaints') %}<a href="{{ url_for('index') }}">الشكاوى</a>{% endif %}
+      {% if can('reports') %}<a href="{{ url_for('reports') }}">التقارير</a>{% endif %}
+      {% if can('manage_users') %}<a href="{{ url_for('users') }}">المستخدمون</a>{% endif %}
+      <a href="{{ url_for('change_password') }}">كلمة المرور</a>
+    </nav>
+    <div class="who">
+      {{ g.user['full_name'] }} <span class="badge">{{ ROLE_NAMES[g.user['role']] }}</span>
+      <form method="post" action="{{ url_for('logout') }}" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-light btn-sm">خروج</button>
+      </form>
+    </div>
+  </header>
+  {% endif %}
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} no-print">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

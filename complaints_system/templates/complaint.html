@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}الشكوى {{ c['id'] }}{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h2>الشكوى رقم {{ c['id'] }}
+    <span class="status status-{{ c['status'] }}">{{ 'منجزة' if c['status'] == 'done' else 'حالية' }}</span>
+  </h2>
+  {% include "_complaint_info.html" %}
+
+  {% if c['status'] == 'done' %}
+  <h3>معلومات الإنجاز</h3>
+  <dl class="info">
+    <div><dt>المغذي</dt><dd>{{ c['feeder'] }}</dd></div>
+    <div><dt>اسم الفني</dt><dd>{{ c['technician'] }}</dd></div>
+    <div><dt>كاتب الجهاز</dt><dd>{{ c['device_writer'] }}</dd></div>
+    <div><dt>المواد المستخدمة</dt><dd>{{ c['materials'] or '—' }}</dd></div>
+    <div><dt>ملاحظات</dt><dd>{{ c['notes'] or '—' }}</dd></div>
+    <div><dt>تاريخ الإنجاز</dt><dd>{{ c['completed_at'] }}</dd></div>
+    <div><dt>رحّلها</dt><dd>{{ c['completed_by_name'] }}</dd></div>
+  </dl>
+  {% endif %}
+
+  <div class="form-actions no-print">
+    {% if c['status'] == 'open' and can('complete_complaint') %}
+      <a class="btn btn-success" href="{{ url_for('complete_complaint', complaint_id=c['id']) }}">تم الإنجاز</a>
+    {% endif %}
+    <a class="btn btn-light" href="{{ url_for('index', tab='done' if c['status'] == 'done' else 'current') }}">رجوع</a>
+    <button class="btn btn-light" onclick="window.print()">طباعة</button>
+  </div>
+</div>
+{% endblock %}

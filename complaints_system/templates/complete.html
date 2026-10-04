@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}إنجاز الشكوى {{ c['id'] }}{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h2>إنجاز الشكوى رقم {{ c['id'] }}</h2>
+  {% include "_complaint_info.html" %}
+
+  <form method="post" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>المغذي <input name="feeder" value="{{ form['feeder'] }}" required></label>
+    <label>اسم الفني <input name="technician" value="{{ form['technician'] }}" required></label>
+    <label>كاتب الجهاز <input name="device_writer" value="{{ form['device_writer'] }}" required></label>
+    <label class="wide">المواد المستخدمة (إن وجدت)
+      <textarea name="materials" rows="2">{{ form['materials'] }}</textarea>
+    </label>
+    <label class="wide">ملاحظات
+      <textarea name="notes" rows="3">{{ form['notes'] }}</textarea>
+    </label>
+    <div class="form-actions">
+      <button class="btn btn-success">ترحيل</button>
+      <a href="{{ url_for('index') }}" class="btn btn-light">إلغاء</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

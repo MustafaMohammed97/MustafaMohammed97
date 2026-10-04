@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}تقرير الشكاوى {{ date_from }} — {{ date_to }}{% endblock %}
+{% block content %}
+<div class="card no-print">
+  <h2>تقرير الشكاوى</h2>
+  <form method="get" class="grid-form">
+    <label>من تاريخ <input type="date" name="from" value="{{ date_from }}" required></label>
+    <label>إلى تاريخ <input type="date" name="to" value="{{ date_to }}" required></label>
+    <label>الحالة
+      <select name="status">
+        <option value="all" {% if status == 'all' %}selected{% endif %}>الكل</option>
+        <option value="open" {% if status == 'open' %}selected{% endif %}>الحالية</option>
+        <option value="done" {% if status == 'done' %}selected{% endif %}>المنجزة</option>
+      </select>
+    </label>
+    <div class="form-actions">
+      <button class="btn btn-primary">عرض التقرير</button>
+      <button class="btn btn-light" name="export" value="csv">تصدير Excel</button>
+      <button type="button" class="btn btn-light" onclick="window.print()">طباعة</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="print-only">
+    <h2>دائرة الكهرباء — صيانة الميكانيك</h2>
+  </div>
+  <h3>تقرير الشكاوى للفترة من {{ date_from }} إلى {{ date_to }}
+    ({{ {'all': 'الكل', 'open': 'الحالية', 'done': 'المنجزة'}[status] if status in ['all','open','done'] else 'الكل' }})</h3>
+  <p class="muted">تاريخ إصدار التقرير: {{ generated_at }} — بواسطة: {{ g.user['full_name'] }}</p>
+
+  <div class="stats">
+    <div class="stat"><span>{{ summary.total }}</span>إجمالي الشكاوى</div>
+    <div class="stat stat-open"><span>{{ summary.open }}</span>حالية</div>
+    <div class="stat stat-done"><span>{{ summary.done }}</span>منجزة</div>
+    <div class="stat"><span>{{ ((summary.done / summary.total * 100) | round | int) if summary.total else 0 }}%</span>نسبة الإنجاز</div>
+  </div>
+
+  {% if summary.by_fault %}
+  <h4>حسب نوع العطل</h4>
+  <table class="grid compact">
+    <thead><tr><th>نوع العطل</th><th>العدد</th></tr></thead>
+    <tbody>
+      {% for name, n in summary.by_fault %}<tr><td>{{ name }}</td><td>{{ n }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h4>تفاصيل الشكاوى</h4>
+  <div class="table-wrap">
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>#</th><th>المحلة</th><th>الزقاق</th><th>الدار</th><th>نوع العطل</th>
+        <th>الهاتف</th><th>الحالة</th><th>تاريخ التسجيل</th><th>المغذي</th>
+        <th>الفني</th><th>كاتب الجهاز</th><th>المواد</th><th>ملاحظات</th><th>تاريخ الإنجاز</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r['id'] }}</td>
+        <td>{{ r['neighborhood'] }}</td>
+        <td>{{ r['alley'] }}</td>
+        <td>{{ r['house'] }}</td>
+        <td>{{ r['fault_type'] }}</td>
+        <td dir="ltr">{{ r['phone'] }}</td>
+        <td><span class="status status-{{ r['status'] }}">{{ 'منجزة' if r['status'] == 'done' else 'حالية' }}</span></td>
+        <td class="nowrap">{{ r['created_at'][:16] }}</td>
+        <td>{{ r['feeder'] or '' }}</td>
+        <td>{{ r['technician'] or '' }}</td>
+        <td>{{ r['device_writer'] or '' }}</td>
+        <td>{{ r['materials'] or '' }}</td>
+        <td>{{ r['notes'] or '' }}</td>
+        <td class="nowrap">{{ (r['completed_at'] or '')[:16] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="14" class="empty">لا توجد شكاوى في هذه الفترة</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

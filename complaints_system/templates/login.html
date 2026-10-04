@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}تسجيل الدخول{% endblock %}
+{% block content %}
+<div class="login-box card">
+  <h1>⚡ نظام شكاوى صيانة الميكانيك</h1>
+  <p class="muted">دائرة الكهرباء</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>اسم المستخدم
+      <input name="username" required autofocus>
+    </label>
+    <label>كلمة المرور
+      <input name="password" type="password" required>
+    </label>
+    <button class="btn btn-primary btn-block">دخول</button>
+  </form>
+</div>
+{% endblock %}
